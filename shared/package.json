@@ -1,0 +1,21 @@
+{
+  "name": "@cairn/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    "./supabase": "./src/supabase.js",
+    "./validateUrl": "./src/validateUrl.js",
+    "./ogParser": "./src/ogParser.js",
+    "./logger": "./src/logger.js",
+    "./queue": "./src/queue.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "bullmq": "^5.12.0",
+    "cheerio": "^1.0.0",
+    "ioredis": "^5.4.1",
+    "undici": "^6.19.0"
+  }
+}

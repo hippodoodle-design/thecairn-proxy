@@ -1,0 +1,14 @@
+{
+  "name": "@cairn/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/worker.js",
+  "scripts": {
+    "start": "node src/worker.js",
+    "dev": "node --watch src/worker.js"
+  },
+  "dependencies": {
+    "@cairn/shared": "*"
+  }
+}
