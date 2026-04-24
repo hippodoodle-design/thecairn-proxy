@@ -45,11 +45,12 @@ Shared across both services:
 
 ### thecairn-web (only)
 
-| Variable                | Default                                                                | Purpose                                     |
-| ----------------------- | ---------------------------------------------------------------------- | ------------------------------------------- |
-| `SUPABASE_JWT_SECRET`   | —                                                                      | Verifies user JWTs (HS256).                 |
-| `ALLOWED_ORIGINS`       | `https://www.thecairn.app,https://thecairn.app,http://localhost:5173` | Comma-separated CORS allowlist.             |
-| `PORT`                  | `3001`                                                                 | HTTP port.                                  |
+| Variable                      | Default                                                                | Purpose                                                                                                                            |
+| ----------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `SUPABASE_SERVICE_ROLE_KEY`   | —                                                                      | Verifies user JWTs via `supabase.auth.getUser(token)`. Works with any signing scheme (HS256, ECC P-256). Never expose to a browser. |
+| `SUPABASE_JWT_SECRET`         | —                                                                      | Legacy, optional. No longer used — kept for possible fallback to local HS256 verification.                                         |
+| `ALLOWED_ORIGINS`             | `https://www.thecairn.app,https://thecairn.app,http://localhost:5173`  | Comma-separated CORS allowlist.                                                                                                    |
+| `PORT`                        | `3001`                                                                 | HTTP port.                                                                                                                         |
 
 ### thecairn-worker (only)
 
@@ -60,7 +61,7 @@ Shared across both services:
 
 **Full env lists for paste-into-Railway:**
 
-- **thecairn-web**: `SUPABASE_URL`, `SUPABASE_JWT_SECRET`, `REDIS_URL`, `ALLOWED_ORIGINS`, `PORT`, `NODE_ENV`, `LOG_LEVEL`, `LOG_FORMAT`
+- **thecairn-web**: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `REDIS_URL`, `ALLOWED_ORIGINS`, `PORT`, `NODE_ENV`, `LOG_LEVEL`, `LOG_FORMAT`
 - **thecairn-worker**: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `REDIS_URL`, `NODE_ENV`, `LOG_LEVEL`, `LOG_FORMAT`, `WORKER_CONCURRENCY`
 
 Copy `.env.example` to `.env` locally. Do **not** commit `.env`.
@@ -150,7 +151,7 @@ Set `LOG_FORMAT=json` in Railway to flip to machine-parseable JSON (Logtail, Dat
 - **SSRF** — `validateUrl` rejects non-http(s), literal private IPs, and hostnames that resolve to private / loopback / link-local / CGNAT / multicast addresses. Re-validated at worker time.
 - **Body cap** — fetch enforces 10s timeout, 5 MB max (streamed, not trusted Content-Length), `text/html` only.
 - **Rate limit** — in-memory token bucket per userId (60 req/min). Stable interface so a Redis-backed swap is a one-file change.
-- **Auth** — Supabase JWT verified with HS256 + `SUPABASE_JWT_SECRET`. Service-role writes happen only after that check.
+- **Auth** — Supabase JWT verified by `supabase.auth.getUser(token)` using the service-role key (handles HS256 and ECC-signed asymmetric JWTs uniformly). Service-role writes happen only after that check.
 - **Retry** — BullMQ `attempts: 3` with exponential backoff (2s, 4s, 8s).
 - **Graceful shutdown** — web drains in-flight requests; worker waits for in-flight jobs before closing the Redis connection.
 
