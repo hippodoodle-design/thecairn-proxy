@@ -10,8 +10,8 @@
   ],
   "scripts": {
     "dev:redis": "docker compose up redis",
-    "dev:web": "cd web && node --watch src/server.js",
-    "dev:worker": "cd worker && node --watch src/worker.js"
+    "dev:web": "node --env-file=.env --watch web/src/server.js",
+    "dev:worker": "node --env-file=.env --watch worker/src/worker.js"
   },
   "engines": {
     "node": ">=20"
