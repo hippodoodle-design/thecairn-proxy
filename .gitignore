@@ -12,3 +12,6 @@ dist
 build
 coverage
 *.log
+
+# Claude Code per-machine local config (not for the remote)
+.claude/
