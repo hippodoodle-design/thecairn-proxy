@@ -13,6 +13,26 @@ function missingEnvVars() {
   return REQUIRED_ENV.filter((name) => !process.env[name]);
 }
 
+/**
+ * Resolve the R2 S3-API endpoint for the configured account, accounting for
+ * Cloudflare's jurisdictional flavours. EU-jurisdictional buckets are NOT
+ * reachable from the default endpoint and return NoSuchBucket 404 if you
+ * try; they must be addressed via the `.eu.` subdomain. Same shape applies
+ * to the FedRAMP jurisdiction.
+ *
+ *   R2_JURISDICTION=eu      → https://<account>.eu.r2.cloudflarestorage.com
+ *   R2_JURISDICTION=fedramp → https://<account>.fedramp.r2.cloudflarestorage.com
+ *   unset / empty / other   → https://<account>.r2.cloudflarestorage.com  (default)
+ *
+ * Case-insensitive; whitespace tolerated.
+ */
+function resolveR2Endpoint(accountId) {
+  const j = (process.env.R2_JURISDICTION || '').trim().toLowerCase();
+  if (j === 'eu')      return `https://${accountId}.eu.r2.cloudflarestorage.com`;
+  if (j === 'fedramp') return `https://${accountId}.fedramp.r2.cloudflarestorage.com`;
+  return `https://${accountId}.r2.cloudflarestorage.com`;
+}
+
 // Memoised at module scope so write (storeFrame) and read (signR2Url) paths
 // share a single S3 client. Lazy-init: importing this module does not require
 // R2 credentials; the client is constructed on first use.
@@ -28,7 +48,7 @@ function getR2Client() {
 
   _client = new S3Client({
     region: 'auto',
-    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    endpoint: resolveR2Endpoint(process.env.R2_ACCOUNT_ID),
     credentials: {
       accessKeyId: process.env.R2_ACCESS_KEY_ID,
       secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
