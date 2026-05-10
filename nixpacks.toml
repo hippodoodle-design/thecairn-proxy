@@ -3,7 +3,12 @@
 # media pipeline) can find `python3` on $PATH. Without this, `npm ci`
 # fails at the youtube-dl-exec preinstall check.
 #
-# The "..." entry preserves Nixpacks' auto-detected packages (Node.js).
+# Uses aptPkgs (Ubuntu apt) rather than nixPkgs because Railway's
+# Nixpacks base image is Ubuntu and apt-installed binaries land on
+# /usr/bin which is on PATH unconditionally. A previous attempt with
+# nixPkgs = ["...", "python312"] did not put `python3` on PATH at the
+# preinstall step, so this approach is more direct.
+#
 # Applies to BOTH @cairn/web and @cairn/worker — they build from the same
 # repo root with the NIXPACKS builder declared in railway.json. Web does
 # not invoke yt-dlp at runtime, but the worker does, so installing Python
@@ -12,4 +17,4 @@
 # video.
 
 [phases.setup]
-nixPkgs = ["...", "python312"]
+aptPkgs = ["python3"]
