@@ -1,0 +1,15 @@
+# Adds Python 3 to the Nixpacks build environment so youtube-dl-exec's
+# postinstall script (a transitive dep of @cairn/shared via the worker's
+# media pipeline) can find `python3` on $PATH. Without this, `npm ci`
+# fails at the youtube-dl-exec preinstall check.
+#
+# The "..." entry preserves Nixpacks' auto-detected packages (Node.js).
+# Applies to BOTH @cairn/web and @cairn/worker — they build from the same
+# repo root with the NIXPACKS builder declared in railway.json. Web does
+# not invoke yt-dlp at runtime, but the worker does, so installing Python
+# rather than skipping the check (YOUTUBE_DL_SKIP_PYTHON_CHECK=1) avoids
+# a silent runtime failure on the worker the next time it harvests a
+# video.
+
+[phases.setup]
+nixPkgs = ["...", "python312"]
