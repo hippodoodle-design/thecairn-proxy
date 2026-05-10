@@ -53,5 +53,5 @@ export function createStubStorage() {
   };
 }
 
-export { createR2Storage } from './r2.js';
+export { createR2Storage, signR2Url } from './r2.js';
 export const STUB_STORAGE_ROOT = STUB_ROOT;
