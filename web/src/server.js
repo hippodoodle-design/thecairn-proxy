@@ -3,6 +3,7 @@ import { corsMiddleware } from './middleware/cors.js';
 import { createLogger } from '@cairn/shared/logger';
 import digestRouter from './routes/digest.js';
 import mediaRouter from './routes/media.js';
+import ingestVideoRouter from './routes/ingest-video.js';
 import mediaHarvestRouter from './routes/media-harvest.js';
 import mediaReunderstandRouter from './routes/media-reunderstand.js';
 import moderationRouter from './routes/moderation.js';
@@ -38,6 +39,7 @@ app.use((req, res, next) => {
 app.use('/health', healthRouter);
 app.use('/api/digest', digestRouter);
 app.use('/api/media', mediaRouter);
+app.use('/api/media', ingestVideoRouter);
 app.use('/api/media', mediaHarvestRouter);
 app.use('/api/media', mediaReunderstandRouter);
 app.use('/api/moderation', moderationRouter);

@@ -1,6 +1,7 @@
 import {
   processVideoUrl,
   PIPELINE_VERSION,
+  setStoneStatus,
 } from '@cairn/shared/media-pipeline';
 import { createR2Storage, createStubStorage } from '@cairn/shared/media-pipeline/storage';
 import { SafetyError } from '@cairn/shared/media-pipeline/errors';
@@ -13,29 +14,30 @@ import { getServiceClient } from '@cairn/shared/supabase';
 /**
  * Job processor for 'media-ingest'.
  *
- * Phase 8 flow:
- *   1. Pick storage backend.
- *   2. Run processVideoUrl. The pipeline now scans every frame about to be
- *      written; CSAM match raises SafetyError BEFORE any bytes hit storage.
- *   3a. SafetyError('csam-detected'): insert a stones row with
- *       safety_status='blocked' (no peakapoo, no embedding), insert an
- *       incidents row, enqueue suspension + reporting jobs. Return.
- *   3b. Successful return: insert stones row with safety_status='safe' or
- *       'flagged' depending on NSFW outcome. Insert galleries row for the
- *       peakapoo. If flagged, also enqueue a moderation_review_queue row.
+ * Two payload shapes are supported:
  *
- * Phase 9c — Delta 2: rows are born with media_pipeline.status set —
- * 'complete' on the success path, 'failed' on the CSAM-blocked path.
- * Both go inside the row's initial INSERT so the field is always
- * present from the moment the row exists. We don't write 'pending' or
- * 'harvesting' in this worker because the row doesn't exist before
- * the pipeline runs (the four-state map only describes follow-on
- * jobs against an existing row — see Delta 2 proposal §2).
+ *  A) Pre-created stones row (Phase 1a — POST /api/media/ingest-video):
+ *     payload includes `stone_id`. The route already inserted a row with
+ *     metadata.media_pipeline.status='pending'. This worker:
+ *       - flips status='harvesting' at job start (setStoneStatus)
+ *       - UPDATEs that row at success with the full understanding +
+ *         status='complete'; or status='failed' on CSAM block
+ *       - On terminal job failure, the mediaWorker 'failed' handler in
+ *         worker.js writes status='failed' via setStoneStatus too.
+ *
+ *  B) Legacy / direct-enqueue path (scripts/enqueue-media.js):
+ *     payload has no stone_id. Worker keeps the original behaviour:
+ *     inserts the stones row at the end with status='complete' (or
+ *     'failed' on the CSAM-blocked path). No row exists to update mid-run,
+ *     so transient failures stay log-only.
+ *
+ * Phase 8 flow (unchanged): processVideoUrl scans every frame about to be
+ * written; CSAM match raises SafetyError BEFORE any bytes hit storage.
  */
 export async function mediaIngest(job, log) {
   const jobStart = Date.now();
-  const { url, ownerId, spaceId } = job.data || {};
-  const jobLog = log.child({ jobId: job.id });
+  const { url, ownerId, spaceId, stone_id: stoneIdFromPayload } = job.data || {};
+  const jobLog = log.child({ jobId: job.id, stoneId: stoneIdFromPayload ?? null });
 
   if (!ownerId) throw new Error('ownerId missing from job payload');
   if (!url) throw new Error('url missing from job payload');
@@ -49,13 +51,18 @@ export async function mediaIngest(job, log) {
 
   const supabase = getServiceClient();
 
+  if (stoneIdFromPayload) {
+    // Drive the four-state contract: pending → harvesting (now) → complete/failed (later).
+    await setStoneStatus(supabase, stoneIdFromPayload, 'harvesting');
+  }
+
   let understanding;
   try {
     understanding = await processVideoUrl(url, { storage });
   } catch (err) {
     if (err instanceof SafetyError && err.classification === 'csam_match') {
       return await handleCsamMatch({
-        err, url, ownerId, spaceId, supabase, jobLog, jobStart,
+        err, url, ownerId, spaceId, stoneIdFromPayload, supabase, jobLog, jobStart,
       });
     }
     throw err;
@@ -66,32 +73,58 @@ export async function mediaIngest(job, log) {
   const safetyResult = understanding.peakapoo?.safety ?? null;
   const safetyStatus = safetyResult?.classification === 'flagged' ? 'flagged' : 'safe';
 
-  const stonesRow = {
-    owner_id: ownerId,
-    space_id: spaceId ?? null,
-    kind: 'video',
-    content_url: url,
-    metadata: {
-      // Born 'complete'. Phase 9c — Delta 2: the four-state status field
-      // is set as part of the initial INSERT so callers reading this row
-      // always see one of the four allowed values, never undefined.
-      media_pipeline: { ...understanding, status: 'complete' },
-    },
-    embedding: understanding.embedding ?? null,
-    safety_status: safetyStatus,
-  };
+  let stoneId;
+  if (stoneIdFromPayload) {
+    // Update the row the route created up-front. We replace the whole
+    // metadata blob deliberately: the route only wrote a placeholder
+    // media_pipeline shape and no other top-level metadata keys are set
+    // on ingest stones today. If that ever changes, switch to jsonb_set
+    // via RPC.
+    const { error: updateErr } = await supabase
+      .from('stones')
+      .update({
+        content_url: url,
+        metadata: {
+          media_pipeline: { ...understanding, status: 'complete' },
+        },
+        embedding: understanding.embedding ?? null,
+        safety_status: safetyStatus,
+      })
+      .eq('id', stoneIdFromPayload);
 
-  const { data: stoneInsert, error: stoneErr } = await supabase
-    .from('stones')
-    .insert(stonesRow)
-    .select('id')
-    .single();
+    if (updateErr) {
+      jobLog.error({ msg: 'supabase stones update failed', err: updateErr });
+      throw new Error(`Supabase stones update failed: ${updateErr.message}`);
+    }
+    stoneId = stoneIdFromPayload;
+  } else {
+    const stonesRow = {
+      owner_id: ownerId,
+      space_id: spaceId ?? null,
+      kind: 'video',
+      content_url: url,
+      metadata: {
+        // Born 'complete'. Phase 9c — Delta 2: the four-state status field
+        // is set as part of the initial INSERT so callers reading this row
+        // always see one of the four allowed values, never undefined.
+        media_pipeline: { ...understanding, status: 'complete' },
+      },
+      embedding: understanding.embedding ?? null,
+      safety_status: safetyStatus,
+    };
 
-  if (stoneErr) {
-    jobLog.error({ msg: 'supabase stones insert failed', err: stoneErr });
-    throw new Error(`Supabase stones insert failed: ${stoneErr.message}`);
+    const { data: stoneInsert, error: stoneErr } = await supabase
+      .from('stones')
+      .insert(stonesRow)
+      .select('id')
+      .single();
+
+    if (stoneErr) {
+      jobLog.error({ msg: 'supabase stones insert failed', err: stoneErr });
+      throw new Error(`Supabase stones insert failed: ${stoneErr.message}`);
+    }
+    stoneId = stoneInsert.id;
   }
-  const stoneId = stoneInsert.id;
 
   let galleryId = null;
   let moderationQueueId = null;
@@ -177,42 +210,61 @@ export async function mediaIngest(job, log) {
  * The job itself returns successfully — the user-facing failure is the
  * stones row's safety_status='blocked' and the absence of any galleries row.
  *
- * Phase 9c — Delta 2: this row is born with media_pipeline.status='failed'
- * inside the same INSERT — the user-facing pipeline did not finish usefully.
+ * When the route pre-created the row (stoneIdFromPayload present), we
+ * UPDATE that row in place. Otherwise we INSERT a fresh one (legacy path).
+ * In both cases media_pipeline.status='failed' lands inside the same write.
  */
-async function handleCsamMatch({ err, url, ownerId, spaceId, supabase, jobLog, jobStart }) {
+async function handleCsamMatch({
+  err, url, ownerId, spaceId, stoneIdFromPayload, supabase, jobLog, jobStart,
+}) {
   const blockedAt = new Date().toISOString();
 
-  const stonesRow = {
-    owner_id: ownerId,
-    space_id: spaceId ?? null,
-    kind: 'video',
-    content_url: url,
-    metadata: {
-      media_pipeline: {
-        source_url: url,
-        pipeline_version: PIPELINE_VERSION,
-        blocked_reason: 'csam-detected',
-        blocked_at: blockedAt,
-        safety_details: err.details,
-        status: 'failed',
-      },
-    },
-    embedding: null,
-    safety_status: 'blocked',
+  const mediaPipelineBlob = {
+    source_url: url,
+    pipeline_version: PIPELINE_VERSION,
+    blocked_reason: 'csam-detected',
+    blocked_at: blockedAt,
+    safety_details: err.details,
+    status: 'failed',
   };
 
-  const { data: stoneInsert, error: stoneErr } = await supabase
-    .from('stones')
-    .insert(stonesRow)
-    .select('id')
-    .single();
-
-  if (stoneErr) {
-    jobLog.error({ msg: 'csam:stones insert failed', err: stoneErr });
-    throw new Error(`csam handler: stones insert failed: ${stoneErr.message}`);
+  let stoneId;
+  if (stoneIdFromPayload) {
+    const { error: updateErr } = await supabase
+      .from('stones')
+      .update({
+        content_url: url,
+        metadata: { media_pipeline: mediaPipelineBlob },
+        embedding: null,
+        safety_status: 'blocked',
+      })
+      .eq('id', stoneIdFromPayload);
+    if (updateErr) {
+      jobLog.error({ msg: 'csam:stones update failed', err: updateErr });
+      throw new Error(`csam handler: stones update failed: ${updateErr.message}`);
+    }
+    stoneId = stoneIdFromPayload;
+  } else {
+    const stonesRow = {
+      owner_id: ownerId,
+      space_id: spaceId ?? null,
+      kind: 'video',
+      content_url: url,
+      metadata: { media_pipeline: mediaPipelineBlob },
+      embedding: null,
+      safety_status: 'blocked',
+    };
+    const { data: stoneInsert, error: stoneErr } = await supabase
+      .from('stones')
+      .insert(stonesRow)
+      .select('id')
+      .single();
+    if (stoneErr) {
+      jobLog.error({ msg: 'csam:stones insert failed', err: stoneErr });
+      throw new Error(`csam handler: stones insert failed: ${stoneErr.message}`);
+    }
+    stoneId = stoneInsert.id;
   }
-  const stoneId = stoneInsert.id;
 
   const incidentRow = {
     user_id: ownerId,

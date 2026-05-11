@@ -167,11 +167,15 @@ mediaWorker.on('ready', () => {
   log.info({ event: 'worker_ready', queue: MEDIA_QUEUE });
 });
 
-// mediaIngest stays log-only on failure: the stones row doesn't exist
-// until the very end of the job, so there's nothing to mark 'failed'
-// for transient or terminal failures alike.
-mediaWorker.on('failed', (job, err) => {
-  log.error({
+// Phase 1a: when the job payload carries a stone_id (the new
+// POST /api/media/ingest-video path), the stones row already exists at
+// 'pending'/'harvesting' when the job begins, so a terminal failure can
+// — and must — leave it at 'failed' rather than silently stuck. Legacy
+// scripts/enqueue-media.js calls have no stone_id; markFailedIfTerminal
+// handles that branch by no-oping and logging.
+mediaWorker.on('failed', async (job, err) => {
+  const jobLog = log.child({ jobId: job?.id, jobName: job?.name, queue: MEDIA_QUEUE });
+  jobLog.error({
     event: 'job_failed',
     queue: MEDIA_QUEUE,
     jobId: job?.id,
@@ -179,6 +183,7 @@ mediaWorker.on('failed', (job, err) => {
     attemptsMade: job?.attemptsMade,
     err,
   });
+  await markFailedIfTerminal({ job, queue: MEDIA_QUEUE, err, jobLog });
 });
 
 mediaWorker.on('error', (err) => {
