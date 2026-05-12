@@ -83,6 +83,7 @@ export async function mediaIngest(job, log) {
     const { error: updateErr } = await supabase
       .from('stones')
       .update({
+        title: understanding.title ?? null,
         content_url: url,
         metadata: {
           media_pipeline: { ...understanding, status: 'complete' },
@@ -102,6 +103,7 @@ export async function mediaIngest(job, log) {
       owner_id: ownerId,
       space_id: spaceId ?? null,
       kind: 'video',
+      title: understanding.title ?? null,
       content_url: url,
       metadata: {
         // Born 'complete'. Phase 9c — Delta 2: the four-state status field
