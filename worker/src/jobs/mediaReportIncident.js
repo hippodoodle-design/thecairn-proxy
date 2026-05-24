@@ -1,5 +1,6 @@
 import { request } from 'undici';
 import { getServiceClient } from '@cairn/shared/supabase';
+import { getIwfReportingApiKey } from '@cairn/shared/buddy';
 
 const REPORT_TIMEOUT_MS = 10_000;
 
@@ -38,10 +39,14 @@ export async function processMediaReportIncident(input, options = {}) {
     return { incident_id, skipped: true };
   }
 
+  // Wave 5c (24 May 2026): IWF_REPORTING_URL stays in env (routing config);
+  // IWF_REPORTING_API_KEY is fetched via Buddy with env fallback. To preserve
+  // the existing stub-vs-live gate we still peek at the env var here — the
+  // belt-and-braces fallback means it remains present in prod.
   const reportingUrl = process.env.IWF_REPORTING_URL;
-  const reportingKey = process.env.IWF_REPORTING_API_KEY;
+  const reportingKeyConfigured = !!process.env.IWF_REPORTING_API_KEY;
 
-  if (!reportingUrl || !reportingKey) {
+  if (!reportingUrl || !reportingKeyConfigured) {
     // STUB MODE — Amanda's IWF approval still pending. We mark the row so the
     // dashboard can show "queued for reporting" honestly, and the row carries
     // the evidence retention window from the table default.
@@ -66,6 +71,13 @@ export async function processMediaReportIncident(input, options = {}) {
   // LIVE MODE — scaffolded. Confirm payload shape against IWF/NCMEC docs
   // before flipping the env flag in production.
   log?.info?.({ msg: 'report-incident:live-start', incident_id });
+
+  let reportingKey;
+  try {
+    reportingKey = await getIwfReportingApiKey();
+  } catch (err) {
+    throw new Error(`report-incident: IWF reporting credential unavailable: ${err instanceof Error ? err.message : err}`);
+  }
 
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), REPORT_TIMEOUT_MS);
