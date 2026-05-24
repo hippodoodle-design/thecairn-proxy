@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { request } from 'undici';
 import { createLogger } from '../../logger.js';
+import { getCloudflareApiToken } from '../../buddy.js';
 
 const log = createLogger('safety-nsfw');
 
@@ -53,10 +54,13 @@ export function createNsfwSkip() {
  * @returns {NsfwBinding}
  */
 export function createNsfwLive(options = {}) {
+  // Wave 5c (24 May 2026): CLOUDFLARE_ACCOUNT_ID stays in env (non-secret
+  // routing config); CLOUDFLARE_API_TOKEN is fetched via Buddy with env
+  // fallback at scan time so a Buddy outage degrades to env, not to
+  // factory-throw.
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const apiToken = process.env.CLOUDFLARE_API_TOKEN;
-  if (!accountId || !apiToken) {
-    throw new Error('CLOUDFLARE_ACCOUNT_ID or CLOUDFLARE_API_TOKEN missing');
+  if (!accountId) {
+    throw new Error('CLOUDFLARE_ACCOUNT_ID missing');
   }
 
   const model = options.model ?? DEFAULT_MODEL;
@@ -72,6 +76,14 @@ export function createNsfwLive(options = {}) {
       } catch (err) {
         log.error({ msg: 'nsfw-live:read-failed', filePath, err });
         return { flagged: false, confidence: 0, label: 'error', error: err.message };
+      }
+
+      let apiToken;
+      try {
+        apiToken = await getCloudflareApiToken();
+      } catch (err) {
+        log.error({ msg: 'nsfw-live:cred-unavailable', err });
+        return { flagged: false, confidence: 0, label: 'error', error: 'cred_unavailable' };
       }
 
       const ac = new AbortController();

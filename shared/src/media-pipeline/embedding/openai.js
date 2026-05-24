@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { createLogger } from '../../logger.js';
+import { getOpenAIApiKey } from '../../buddy.js';
 import { EmbeddingError } from '../errors.js';
 
 const log = createLogger('embedding-openai');
@@ -14,16 +15,22 @@ const DIMENSIONS = 1536;
  * this module doesn't require OPENAI_API_KEY to be present (matters for tests
  * that swap in createStubEmbedder).
  *
+ * Wave 5c (24 May 2026): the OpenAI key is fetched via Buddy with
+ * OPENAI_API_KEY env-var fallback.
+ *
  * @returns {import('./index.js').EmbeddingBinding}
  */
 export function createOpenAIEmbedder() {
   let client = null;
-  function getClient() {
+  async function getClient() {
     if (client) return client;
-    if (!process.env.OPENAI_API_KEY) {
-      throw new EmbeddingError('OPENAI_API_KEY not set in environment');
+    let apiKey;
+    try {
+      apiKey = await getOpenAIApiKey();
+    } catch (err) {
+      throw new EmbeddingError(err instanceof Error ? err.message : String(err));
     }
-    client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    client = new OpenAI({ apiKey });
     return client;
   }
 
@@ -35,7 +42,7 @@ export function createOpenAIEmbedder() {
 
       log.info({ msg: 'embed:start', chars: text.length });
 
-      const openai = getClient();
+      const openai = await getClient();
       let response;
       try {
         response = await openai.embeddings.create({

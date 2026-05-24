@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import OpenAI from 'openai';
 import { createLogger } from '../../logger.js';
+import { getOpenAIApiKey } from '../../buddy.js';
 import { UnderstandingError } from '../errors.js';
 
 const log = createLogger('understand-gpt4o');
@@ -123,12 +124,15 @@ function coerceResult(parsed, frameCount) {
  */
 export function createGpt4oUnderstander() {
   let client = null;
-  function getClient() {
+  async function getClient() {
     if (client) return client;
-    if (!process.env.OPENAI_API_KEY) {
-      throw new UnderstandingError('OPENAI_API_KEY not set in environment');
+    let apiKey;
+    try {
+      apiKey = await getOpenAIApiKey();
+    } catch (err) {
+      throw new UnderstandingError(err instanceof Error ? err.message : String(err));
     }
-    client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    client = new OpenAI({ apiKey });
     return client;
   }
 
@@ -177,7 +181,7 @@ export function createGpt4oUnderstander() {
         visionDetail,
       });
 
-      const openai = getClient();
+      const openai = await getClient();
       let response;
       try {
         response = await openai.chat.completions.create({

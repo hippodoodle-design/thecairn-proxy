@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { request } from 'undici';
 import { createLogger } from '../../logger.js';
+import { getIwfApiKey } from '../../buddy.js';
 import { SafetyError } from '../errors.js';
 
 const log = createLogger('safety-iwf');
@@ -47,16 +48,27 @@ export function createIwfStub() {
  * @returns {IwfBinding}
  */
 export function createIwfLive() {
+  // Wave 5c (24 May 2026): IWF_API_URL stays in env (routing config);
+  // IWF_API_KEY is fetched via Buddy with env fallback at scan time.
   const url = process.env.IWF_API_URL;
-  const apiKey = process.env.IWF_API_KEY;
-  if (!url || !apiKey) {
-    throw new SafetyError('IWF_API_URL or IWF_API_KEY missing', { classification: 'config_error' });
+  if (!url) {
+    throw new SafetyError('IWF_API_URL missing', { classification: 'config_error' });
   }
 
   return {
     async scan(filePath) {
       const start = Date.now();
       const body = await readFile(filePath);
+
+      let apiKey;
+      try {
+        apiKey = await getIwfApiKey();
+      } catch (err) {
+        throw new SafetyError('IWF credentials unavailable', {
+          classification: 'config_error',
+          cause: err instanceof Error ? err : new Error(String(err)),
+        });
+      }
 
       const ac = new AbortController();
       const timer = setTimeout(() => ac.abort(), IWF_TIMEOUT_MS);

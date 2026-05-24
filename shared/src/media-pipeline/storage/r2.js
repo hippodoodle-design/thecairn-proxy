@@ -3,14 +3,19 @@ import { randomUUID } from 'node:crypto';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createLogger } from '../../logger.js';
+import { getR2AccessKeyId, getR2SecretAccessKey } from '../../buddy.js';
 import { StorageError } from '../errors.js';
 
 const log = createLogger('storage-r2');
 
-const REQUIRED_ENV = ['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET'];
+// Wave 5c (24 May 2026): the two secret R2 creds — R2_ACCESS_KEY_ID and
+// R2_SECRET_ACCESS_KEY — are now fetched via Buddy with env fallback.
+// R2_ACCOUNT_ID, R2_BUCKET, and R2_JURISDICTION are non-secret routing
+// config and stay as plain env vars.
+const REQUIRED_CONFIG_ENV = ['R2_ACCOUNT_ID', 'R2_BUCKET'];
 
-function missingEnvVars() {
-  return REQUIRED_ENV.filter((name) => !process.env[name]);
+function missingConfigEnvVars() {
+  return REQUIRED_CONFIG_ENV.filter((name) => !process.env[name]);
 }
 
 /**
@@ -38,20 +43,30 @@ function resolveR2Endpoint(accountId) {
 // R2 credentials; the client is constructed on first use.
 let _client = null;
 
-function getR2Client() {
+async function getR2Client() {
   if (_client) return _client;
 
-  const missing = missingEnvVars();
+  const missing = missingConfigEnvVars();
   if (missing.length > 0) {
-    throw new StorageError(`R2 credentials missing: ${missing.join(', ')}`);
+    throw new StorageError(`R2 config missing: ${missing.join(', ')}`);
+  }
+
+  let accessKeyId, secretAccessKey;
+  try {
+    [accessKeyId, secretAccessKey] = await Promise.all([
+      getR2AccessKeyId(),
+      getR2SecretAccessKey(),
+    ]);
+  } catch (err) {
+    throw new StorageError(`R2 credentials unavailable: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   _client = new S3Client({
     region: 'auto',
     endpoint: resolveR2Endpoint(process.env.R2_ACCOUNT_ID),
     credentials: {
-      accessKeyId: process.env.R2_ACCESS_KEY_ID,
-      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+      accessKeyId,
+      secretAccessKey,
     },
     forcePathStyle: false,
   });
@@ -75,7 +90,7 @@ export function createR2Storage() {
 
       log.info({ msg: 'r2-storage:put', key, size_bytes });
 
-      const s3 = getR2Client();
+      const s3 = await getR2Client();
       try {
         await s3.send(new PutObjectCommand({
           Bucket: process.env.R2_BUCKET,
@@ -111,7 +126,7 @@ export function createR2Storage() {
  * @returns {Promise<string>} signed URL
  */
 export async function signR2Url(key, ttlSeconds = 21600) {
-  const s3 = getR2Client();
+  const s3 = await getR2Client();
   const cmd = new GetObjectCommand({
     Bucket: process.env.R2_BUCKET,
     Key: key,

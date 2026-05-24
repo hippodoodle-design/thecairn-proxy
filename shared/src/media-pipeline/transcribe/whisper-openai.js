@@ -1,6 +1,7 @@
 import { createReadStream, statSync, existsSync } from 'node:fs';
 import OpenAI from 'openai';
 import { createLogger } from '../../logger.js';
+import { getOpenAIApiKey } from '../../buddy.js';
 import { TranscriptionError } from '../errors.js';
 
 const log = createLogger('transcribe-whisper');
@@ -13,16 +14,22 @@ const WHISPER_UPLOAD_CAP_BYTES = 25 * 1024 * 1024;
  * The OpenAI client is constructed lazily on first call so module import does
  * not require OPENAI_API_KEY to be set (matters for tests that swap in stubs).
  *
+ * Wave 5c (24 May 2026): the OpenAI key is fetched via Buddy with
+ * OPENAI_API_KEY env-var fallback.
+ *
  * @returns {import('./index.js').TranscriberBinding}
  */
 export function createWhisperTranscriber() {
   let client = null;
-  function getClient() {
+  async function getClient() {
     if (client) return client;
-    if (!process.env.OPENAI_API_KEY) {
-      throw new TranscriptionError('OPENAI_API_KEY not set in environment');
+    let apiKey;
+    try {
+      apiKey = await getOpenAIApiKey();
+    } catch (err) {
+      throw new TranscriptionError(err instanceof Error ? err.message : String(err));
     }
-    client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    client = new OpenAI({ apiKey });
     return client;
   }
 
@@ -40,7 +47,7 @@ export function createWhisperTranscriber() {
 
       log.info({ msg: 'transcribe:start', audioPath, sizeBytes });
 
-      const openai = getClient();
+      const openai = await getClient();
       let response;
       try {
         response = await openai.audio.transcriptions.create({
