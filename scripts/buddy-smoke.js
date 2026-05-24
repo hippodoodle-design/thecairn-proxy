@@ -64,8 +64,8 @@ try {
     bad(`returned unexpected value: ${typeof res} ${String(res).slice(0, 50)}`);
     failures += 1;
   }
-  const sawBuddyLog = lines.some(([, l]) => /\[buddy\] supabase service_role key fetched from Buddy/.test(l));
-  if (sawBuddyLog) ok(`log emitted: "[buddy] supabase service_role key fetched from Buddy"`);
+  const sawBuddyLog = lines.some(([, l]) => /\[buddy\] credential fetched from Buddy: supabase-thecairn-service-role/.test(l));
+  if (sawBuddyLog) ok(`log emitted: "[buddy] credential fetched from Buddy: supabase-thecairn-service-role"`);
   else { bad('missing expected log line'); failures += 1; }
 } catch (e) {
   bad(`threw: ${e instanceof Error ? e.message : e}`);

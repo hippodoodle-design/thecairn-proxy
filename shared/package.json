@@ -6,6 +6,7 @@
   "main": "src/index.js",
   "exports": {
     "./supabase": "./src/supabase.js",
+    "./buddy": "./src/buddy.js",
     "./validateUrl": "./src/validateUrl.js",
     "./ogParser": "./src/ogParser.js",
     "./logger": "./src/logger.js",
