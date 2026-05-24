@@ -37,6 +37,7 @@ app.use((req, res, next) => {
 });
 
 app.use('/health', healthRouter);
+app.use('/healthz', healthRouter);
 app.use('/api/digest', digestRouter);
 app.use('/api/media', mediaRouter);
 app.use('/api/media', ingestVideoRouter);
