@@ -33,7 +33,7 @@ router.get('/queue', requireAuth, requireModerator, rateLimitPerUser, async (req
   const reqLog = log.child({ route: 'GET /api/moderation/queue' });
 
   try {
-    const supabase = getServiceClient();
+    const supabase = await getServiceClient();
     const { data, error } = await supabase
       .from('moderation_review_queue')
       .select(`
@@ -79,7 +79,7 @@ router.post('/review/:queue_id', requireAuth, requireModerator, rateLimitPerUser
   }
 
   try {
-    const supabase = getServiceClient();
+    const supabase = await getServiceClient();
     const { data: row, error: readErr } = await supabase
       .from('moderation_review_queue')
       .select('id, stone_id, gallery_id, file_path, status')

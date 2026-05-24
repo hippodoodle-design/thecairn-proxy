@@ -40,7 +40,7 @@ router.post('/:stone_id/reunderstand', requireAuth, rateLimitPerUser, async (req
   const reqLog = log.child({ route: 'POST /api/media/:stone_id/reunderstand', stone_id, ownerIdTail: userId.slice(-4) });
 
   try {
-    const supabase = getServiceClient();
+    const supabase = await getServiceClient();
     const { data: stone, error: stoneErr } = await supabase
       .from('stones')
       .select('id, owner_id, kind, metadata')

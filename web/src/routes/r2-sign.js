@@ -47,7 +47,7 @@ router.post('/sign', requireAuth, rateLimitPerUser, async (req, res) => {
   const requestedKeys = [...requested];
 
   try {
-    const supabase = getServiceClient();
+    const supabase = await getServiceClient();
 
     // Stones path: select only the JSON-path projection so we don't drag the
     // full metadata blob across the wire. Each row is { peakapoo_key: string|null }.

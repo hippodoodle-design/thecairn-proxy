@@ -65,7 +65,7 @@ function computeRetryFrameCap(durationSec) {
 export async function processMediaReunderstand(input, options = {}) {
   const { stone_id, requested_by_owner_id } = input || {};
   const log = options.log;
-  const supabase = options.supabase ?? getServiceClient();
+  const supabase = options.supabase ?? (await getServiceClient());
   const storage = options.storage ?? pickStorage();
   const acquirer = options.acquirer ?? createYtDlpAcquirer();
   const understander = options.understander ?? createGpt4oUnderstander();
@@ -375,7 +375,7 @@ export async function mediaReunderstand(job, log) {
 }
 
 async function handleReunderstandCsamMatch({ err, stoneId, jobLog }) {
-  const supabase = getServiceClient();
+  const supabase = await getServiceClient();
   const { data: stone, error: stoneReadErr } = await supabase
     .from('stones')
     .select('id, owner_id, metadata')

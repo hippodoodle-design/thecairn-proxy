@@ -46,7 +46,7 @@ router.post('/:stone_id/harvest', requireAuth, rateLimitPerUser, async (req, res
       return res.status(400).json({ ok: false, error: 'count must be 5, 10, or 15' });
     }
 
-    const supabase = getServiceClient();
+    const supabase = await getServiceClient();
     const { data: stone, error: stoneErr } = await supabase
       .from('stones')
       .select('id, owner_id, kind, metadata')

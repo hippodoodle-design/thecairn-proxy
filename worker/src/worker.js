@@ -70,7 +70,7 @@ async function markFailedIfTerminal({ job, queue, err, jobLog }) {
   }
 
   try {
-    const supabase = getServiceClient();
+    const supabase = await getServiceClient();
     await setStoneStatus(supabase, stoneId, 'failed');
     jobLog.error({
       msg: 'job_failed_terminal_marked',

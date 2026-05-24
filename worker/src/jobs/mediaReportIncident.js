@@ -19,7 +19,7 @@ const REPORT_TIMEOUT_MS = 10_000;
 export async function processMediaReportIncident(input, options = {}) {
   const { incident_id } = input || {};
   const log = options.log;
-  const supabase = options.supabase ?? getServiceClient();
+  const supabase = options.supabase ?? (await getServiceClient());
 
   if (!incident_id) throw new Error('incident_id missing from report payload');
 

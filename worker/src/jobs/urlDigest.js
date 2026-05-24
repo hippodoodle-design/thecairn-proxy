@@ -125,7 +125,7 @@ export async function urlDigest(job, log) {
     is_favourite: false,
   };
 
-  const supabase = getServiceClient();
+  const supabase = await getServiceClient();
   const { data, error } = await supabase
     .from('stones')
     .insert(row)

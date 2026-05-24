@@ -32,7 +32,7 @@ export async function requireAuth(req, res, next) {
 
   let supabase;
   try {
-    supabase = getServiceClient();
+    supabase = await getServiceClient();
   } catch {
     log.warn({ event: 'auth_rejected', reason: 'not_configured' });
     return res.status(500).json({ ok: false, error: 'Server auth not configured' });

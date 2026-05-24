@@ -11,7 +11,7 @@ import { getServiceClient } from '@cairn/shared/supabase';
 export async function processMediaSuspendUser(input, options = {}) {
   const { user_id, reason, incident_id } = input || {};
   const log = options.log;
-  const supabase = options.supabase ?? getServiceClient();
+  const supabase = options.supabase ?? (await getServiceClient());
 
   if (!user_id) throw new Error('user_id missing from suspension payload');
   if (!reason) throw new Error('reason missing from suspension payload');

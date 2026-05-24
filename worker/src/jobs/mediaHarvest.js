@@ -50,7 +50,7 @@ function pickStorage() {
 export async function processMediaHarvest(input, options = {}) {
   const { stone_id, count, requested_by_owner_id } = input || {};
   const log = options.log;
-  const supabase = options.supabase ?? getServiceClient();
+  const supabase = options.supabase ?? (await getServiceClient());
   const storage = options.storage ?? pickStorage();
   const acquirer = options.acquirer ?? createYtDlpAcquirer();
   const safetyScanner = options.safetyScanner ?? createSafetyScanner();
@@ -264,7 +264,7 @@ export async function mediaHarvest(job, log) {
 }
 
 async function handleHarvestCsamMatch({ err, stoneId, jobLog }) {
-  const supabase = getServiceClient();
+  const supabase = await getServiceClient();
 
   // Read existing stone for owner_id + space_id continuity.
   const { data: stone, error: stoneReadErr } = await supabase

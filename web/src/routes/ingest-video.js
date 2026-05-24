@@ -50,7 +50,7 @@ router.post('/ingest-video', requireAuth, rateLimitPerUser, async (req, res) => 
   }
 
   const normalizedUrl = check.url.toString();
-  const supabase = getServiceClient();
+  const supabase = await getServiceClient();
 
   let stoneId;
   try {

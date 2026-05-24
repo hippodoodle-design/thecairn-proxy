@@ -49,7 +49,7 @@ export async function mediaIngest(job, log) {
   const storage = useR2 ? createR2Storage() : createStubStorage();
   jobLog.info({ msg: 'media-ingest:storage', backend: useR2 ? 'r2' : 'stub' });
 
-  const supabase = getServiceClient();
+  const supabase = await getServiceClient();
 
   if (stoneIdFromPayload) {
     // Drive the four-state contract: pending → harvesting (now) → complete/failed (later).
