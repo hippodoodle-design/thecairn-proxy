@@ -8,6 +8,7 @@ import mediaHarvestRouter from './routes/media-harvest.js';
 import mediaReunderstandRouter from './routes/media-reunderstand.js';
 import moderationRouter from './routes/moderation.js';
 import r2SignRouter from './routes/r2-sign.js';
+import companionsRouter, { speciesRequestsRouter } from './routes/companions.js';
 import healthRouter from './routes/health.js';
 
 const log = createLogger('thecairn-web');
@@ -17,6 +18,11 @@ app.disable('x-powered-by');
 app.set('trust proxy', 1); // Railway / Vercel style proxies; req.ip then reflects XFF.
 
 app.use(corsMiddleware);
+// Uploaded 1D pets (a child's drawing) can be up to 5 MB, which is ~6.7 MB as
+// base64. Mount a larger JSON parser for that one path BEFORE the global 32kb
+// parser — express.json is idempotent (skips a request whose body it already
+// parsed), so the global parser below leaves this path's body untouched.
+app.use('/api/companions/upload-1d', express.json({ limit: '8mb' }));
 app.use(express.json({ limit: '32kb' }));
 
 // Per-request access log. Cheap, structured.
@@ -45,6 +51,8 @@ app.use('/api/media', mediaHarvestRouter);
 app.use('/api/media', mediaReunderstandRouter);
 app.use('/api/moderation', moderationRouter);
 app.use('/api/r2', r2SignRouter);
+app.use('/api/companions', companionsRouter);
+app.use('/api/species-requests', speciesRequestsRouter);
 
 // 404 for anything unmatched.
 app.use((req, res) => {

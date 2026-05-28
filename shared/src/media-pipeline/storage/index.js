@@ -50,6 +50,17 @@ export function createStubStorage() {
 
       return { key, size_bytes, backend: 'stub' };
     },
+
+    async storeObject({ filePath, key, contentType = 'application/octet-stream' }) {
+      const dest = path.join(STUB_ROOT, key);
+      mkdirSync(path.dirname(dest), { recursive: true });
+      const data = readFileSync(filePath);
+      writeFileSync(dest, data);
+      const size_bytes = statSync(dest).size;
+
+      log.info({ msg: 'stub-storage:wrote-object', key, dest, contentType, size_bytes });
+      return { key, size_bytes, backend: 'stub' };
+    },
   };
 }
 

@@ -113,6 +113,35 @@ export function createR2Storage() {
 
       return { key, size_bytes, backend: 'r2' };
     },
+
+    async storeObject({ filePath, key, contentType = 'application/octet-stream' }) {
+      const body = readFileSync(filePath);
+      const size_bytes = body.length;
+
+      log.info({ msg: 'r2-storage:put-object', key, contentType, size_bytes });
+
+      const s3 = await getR2Client();
+      try {
+        await s3.send(new PutObjectCommand({
+          Bucket: process.env.R2_BUCKET,
+          Key: key,
+          Body: body,
+          ContentType: contentType,
+        }));
+      } catch (err) {
+        const status = err?.$metadata?.httpStatusCode;
+        if (status === 401 || status === 403) {
+          throw new StorageError('R2 credentials rejected', { cause: err });
+        }
+        if (status === 404) {
+          throw new StorageError('R2 bucket not found', { cause: err });
+        }
+        throw new StorageError(err?.message || String(err), { cause: err });
+      }
+
+      log.info({ msg: 'r2-storage:put-object-done', key, size_bytes });
+      return { key, size_bytes, backend: 'r2' };
+    },
   };
 }
 
