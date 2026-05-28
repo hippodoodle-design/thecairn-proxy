@@ -7,6 +7,12 @@ export const HARVEST_QUEUE = 'cairn-harvest';
 export const REUNDERSTAND_QUEUE = 'cairn-reunderstand';
 export const MODERATION_QUEUE = 'cairn-moderation';
 export const INCIDENT_QUEUE = 'cairn-incident-report';
+export const ZOO_QUEUE = 'cairn-zoo-life';
+
+// Timezone for the daily Zoo-life jobs. Amanda's clock (UK) by default; override
+// with CAIRN_TZ. Used by the cron schedulers so letters/activities/moods land at
+// a sensible local hour rather than UTC.
+export const ZOO_TZ = process.env.CAIRN_TZ || 'Europe/London';
 
 let cachedConn = null;
 
@@ -269,4 +275,63 @@ export function buildIncidentWorker(processor, opts = {}) {
     defaultJobOptions,
     ...rest,
   });
+}
+
+/**
+ * cairn-zoo-life: the daily Zoo rhythm — zoo-keeper letters, the communal Visit
+ * Log, and each pet's Mood of the Day. These are gentle, idempotent-per-day
+ * batch jobs fired by cron schedulers (see registerZooSchedulers). Two attempts
+ * so a transient DB blip retries; the per-day guards in each job make a re-run
+ * safe.
+ */
+export function buildZooQueue() {
+  return new Queue(ZOO_QUEUE, {
+    connection: getRedisConnection(),
+    defaultJobOptions: {
+      attempts: 2,
+      backoff: { type: 'exponential', delay: 5000 },
+      removeOnComplete: { age: 7 * 24 * 3600, count: 200 },
+      removeOnFail: { age: 30 * 24 * 3600 },
+    },
+  });
+}
+
+export function buildZooWorker(processor, opts = {}) {
+  const {
+    concurrency = 1,
+    lockDuration = 120_000,
+    ...rest
+  } = opts;
+
+  return new Worker(ZOO_QUEUE, processor, {
+    connection: getRedisConnection(),
+    concurrency,
+    lockDuration,
+    ...rest,
+  });
+}
+
+/**
+ * Register the three daily Zoo-life cron schedulers on a cairn-zoo-life queue.
+ * Idempotent: upsertJobScheduler replaces an existing scheduler of the same id,
+ * so calling this on every worker boot is safe and self-correcting if a cron
+ * pattern changes. Moods run first (06:00) so letters/activities can reflect
+ * them; the Visit Log lands early; letters arrive at a gentle 08:00.
+ */
+export async function registerZooSchedulers(queue) {
+  await queue.upsertJobScheduler(
+    'companion-moods-daily',
+    { pattern: '0 6 * * *', tz: ZOO_TZ },
+    { name: 'companion-moods', data: {} },
+  );
+  await queue.upsertJobScheduler(
+    'zoo-daily-activities-daily',
+    { pattern: '15 6 * * *', tz: ZOO_TZ },
+    { name: 'zoo-daily-activities', data: {} },
+  );
+  await queue.upsertJobScheduler(
+    'zoo-keeper-letters-daily',
+    { pattern: '0 8 * * *', tz: ZOO_TZ },
+    { name: 'zookeeper-letters', data: {} },
+  );
 }

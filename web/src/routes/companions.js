@@ -7,6 +7,7 @@ import { getServiceClient } from '@cairn/shared/supabase';
 import { createLogger } from '@cairn/shared/logger';
 import { createSafetyScanner } from '@cairn/shared/media-pipeline';
 import { createR2Storage, createStubStorage } from '@cairn/shared/media-pipeline/storage';
+import { drawPersonality, drawUploadedPersonality } from '@cairn/shared/companions';
 import { requireAuth } from '../middleware/auth.js';
 import { rateLimitPerUser } from '../middleware/rateLimit.js';
 
@@ -151,7 +152,7 @@ router.post('/pick', requireAuth, rateLimitPerUser, async (req, res) => {
 
     const { data: companion, error: cErr } = await supabase
       .from('companions')
-      .select('id, dimensions_available, status')
+      .select('id, dimensions_available, status, personality_distribution')
       .eq('id', companion_id)
       .maybeSingle();
     if (cErr) {
@@ -170,6 +171,10 @@ router.post('/pick', requireAuth, rateLimitPerUser, async (req, res) => {
       return res.status(400).json({ ok: false, error: `that companion is not available in ${preferred}` });
     }
 
+    // You don't choose your pet's personality — you meet it. Drawn once, here,
+    // from the species distribution; never taken from the request. Fixed after.
+    const personality = drawPersonality(companion.personality_distribution);
+
     const { data: row, error: insErr } = await supabase
       .from('user_companions')
       .insert({
@@ -179,6 +184,7 @@ router.post('/pick', requireAuth, rateLimitPerUser, async (req, res) => {
         custom_name: name ?? null,
         accessory: acc.value,
         preferred_dimension: preferred,
+        personality_traits: personality,
         last_active_at: new Date().toISOString(),
         status: 'active',
       })
@@ -282,6 +288,7 @@ router.post('/upload-1d', requireAuth, rateLimitPerUser, async (req, res) => {
         custom_name: name ?? null,
         accessory: acc.value,
         preferred_dimension: '1d', // a child's drawing is inherently 1D
+        personality_traits: drawUploadedPersonality(), // uploaded pets get a charming generic spread
         last_active_at: new Date().toISOString(),
         status: 'active',
       })

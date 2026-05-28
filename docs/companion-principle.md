@@ -94,6 +94,72 @@ JPG-only). When R2 isn't configured, the filesystem stub is used (dev parity).
 
 ---
 
+## Wave 2 — Zoo Life + Personality (29 May 2026, backend slice)
+
+> "You don't choose your pet's personality — you meet it."
+
+Migration `migrations/20260529_007_companions_zoo_life_personality.sql` (extends 006).
+Backend logic lives in `shared/src/companions/` (pure, unit-tested) and three daily
+worker jobs in `worker/src/jobs/`.
+
+### Personality (discovered, not chosen)
+
+- **Species level** — `companions.personality_distribution` (jsonb): the shape of who an
+  animal tends to be, e.g. panda `{playful:0.5, calm:0.3, sociable:0.2}`. Seeded on all 8
+  starters. Weights are advisory; the draw normalises them.
+- **Pet level** — `user_companions.personality_traits` (jsonb `{traits:[...], primary}`):
+  drawn **once at pick time** from the species distribution (`drawPersonality`) and then
+  **fixed** — the pet is who it is. The user never sets it; it's never taken from the
+  request body. Uploaded 1D pets get a charming generic spread (`drawUploadedPersonality`).
+- 1–2 traits per pet (~40% carry a distinct second trait). Trait vocabulary: `calm`,
+  `mischievous`, `playful`, `shy`, `water-lover`, `cuddle-lover`, `escape-attempting`,
+  `chill`, `introspective`, `still`, `sociable`. The frontend follow-behaviour state
+  machine keys off these names.
+
+### The three daily rhythms (worker jobs on the `cairn-zoo-life` queue)
+
+Cron schedulers registered on worker boot (`registerZooSchedulers`, tz `CAIRN_TZ`,
+default `Europe/London`). All are **idempotent per day** — a re-run or double-fire never
+doubles up.
+
+| Job (`job.name`) | Cron | Does | Doctrine |
+|---|---|---|---|
+| `companion-moods` | `0 6 * * *` | Draw a quiet **Mood of the Day** per active pet → `companion_events` row `mood_set` `{date, mood}`. Moods: sleepy/playful/curious/chill/mischievous/sociable/introspective/dappy, tilted by traits. | Mood is the pet's own — never a judgement of the user. |
+| `zoo-daily-activities` | `15 6 * * *` | Generate ~8 **Visit Log** entries → `zoo_daily_activities`, weighted by who's in the Zoo + their traits. Includes the **panda playgroup** when ≥2 pandas. | Records what the *animals* did, never what the user didn't. |
+| `zookeeper-letters` | `0 8 * * *` | ~10% of active/in-zoo pets get a gentle **Zookeeper Letter** → `zoo_keeper_letters` (max 1/pet/day). Template library keyed by trait + mood flavour. | Always about the pet / Zoo life; never about the user. |
+
+### Schema additions (007)
+
+| Object | Purpose |
+|---|---|
+| `companions.personality_distribution` | Species-level personality shape (seeded). |
+| `user_companions.personality_traits` | This pet's fixed traits, drawn at pick time. |
+| `zoo_keeper_letters` | Per-pet gentle notes. Owner-read + owner-update (mark read); service-role writes. |
+| `zoo_daily_activities` | Communal Visit Log. Authed-read (the Zoo's shared life); service-role writes. |
+| `companion_events.event` | CHECK extended with `mood_set`, `hello_sniff`, `ambient_activity`. |
+
+### Hello Sniff (Magic 4) — stubbed
+
+`hello_sniff` is a recognised `companion_events` type and the frontend hook fires when two
+companions share a page. Cross-Cairn visiting (which makes that common) is a future wave;
+the event + type are wired so it's ready.
+
+### Bearing
+
+- **Live** — pets with their own gentle character, observable, never demanding; a Zoo that
+  is alive whether or not you're watching.
+- **Dead** — pets that punish absence or demand attention; stat-tracking; mood as a stick.
+
+### Verification (this session)
+
+- `scripts/test-companions-life.js` — 28 pure-logic checks green (personality sampling
+  correctness, mood affinity, letter parametrisation + no-guilt guard, Visit Log + panda
+  playgroup). No DB/Redis needed.
+- The three worker jobs are **inert-but-correct** until migration 007 is applied (they
+  query the companion tables). Same apply gate as 006 — see below.
+
+---
+
 ## Honest About Who's Building
 
 Where AI is involved in safety-scanning uploaded 1D drawings (Cloudflare Workers AI NSFW
@@ -103,9 +169,21 @@ classification + IWF image intercept), that must be stated plainly in the upload
 
 ## What's open / recommended follow-ups
 
+- **Migration apply gate.** Both `006` and `007` are written but **not applied** — this
+  repo has PostgREST creds only (no DB connection string) and CLAUDE.md forbids the
+  Supabase MCP. Apply via `supabase` CLI `--db-url` or the SQL editor, in order (006 then
+  007). Tracked under `CAIRN_SUPABASE_DB_URL` (alert `739df096`). The Wave 2 worker jobs
+  are inert until then.
 - **Frontend** (`/zoo`, `/zoo/pick`, `/zoo/upload`, `/zoo/request`, persistent corner
   companion, the Goodbye-Wave client trigger) lives in `thecairn-app` — **not shipped in
-  this wave** (separate repo; see ship report for the router-tagging note).
+  this wave** (separate repo; see ship report for the router-tagging note). Wave 2 adds
+  more frontend: the living `/zoo` (paddling pool, fence areas, zoo-keepers, panda
+  playgroup), the personality-driven follow-the-user system (30-second-return rule), the
+  letters inbox + unread badge, the Visit Log ticker, and the mood indicator toggle
+  (default off).
+- **LLM-enriched Zookeeper Letters.** The letter library is a starter set (several lines
+  per trait + general + mood pools). A follow-up can enrich variety with a small LLM call
+  per letter — tiny cost, big charm. The template path stays as the deterministic default.
 - **Illustration / animation pipeline** — Amanda's work. `asset_paths` are placeholders.
 - **SVG sanitisation.** Uploaded SVG is currently rejected only for obvious active content
   (`<script>`, `javascript:`, `on*=` handlers). Before SVG is ever served *inline* (vs via

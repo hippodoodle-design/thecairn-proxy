@@ -5,12 +5,16 @@ import {
   buildReunderstandWorker,
   buildModerationWorker,
   buildIncidentWorker,
+  buildZooQueue,
+  buildZooWorker,
+  registerZooSchedulers,
   DIGEST_QUEUE,
   MEDIA_QUEUE,
   HARVEST_QUEUE,
   REUNDERSTAND_QUEUE,
   MODERATION_QUEUE,
   INCIDENT_QUEUE,
+  ZOO_QUEUE,
   getRedisConnection,
 } from '@cairn/shared/queue';
 import { createLogger } from '@cairn/shared/logger';
@@ -22,6 +26,9 @@ import { mediaHarvest } from './jobs/mediaHarvest.js';
 import { mediaReunderstand } from './jobs/mediaReunderstand.js';
 import { mediaSuspendUser } from './jobs/mediaSuspendUser.js';
 import { mediaReportIncident } from './jobs/mediaReportIncident.js';
+import { companionMoods } from './jobs/companionMoods.js';
+import { zooDailyActivities } from './jobs/zooDailyActivities.js';
+import { zookeeperLetters } from './jobs/zookeeperLetters.js';
 
 const log = createLogger('thecairn-worker');
 
@@ -344,6 +351,57 @@ incidentWorker.on('error', (err) => {
   log.error({ msg: 'incident worker error', err });
 });
 
+// cairn-zoo-life: the daily Zoo rhythm (moods, Visit Log, keeper letters), fired
+// by cron schedulers. The job processors are inert-but-correct until migration
+// 007 is applied (they query companion tables); the schedulers are registered on
+// boot and self-heal if a cron pattern changes (upsert semantics).
+const zooQueue = buildZooQueue();
+const zooWorker = buildZooWorker(async (job) => {
+  const attempt = job.attemptsMade + 1;
+  const jobLog = log.child({ jobId: job.id, jobName: job.name, attempt, queue: ZOO_QUEUE });
+  jobLog.info({ event: 'job_started', jobId: job.id, jobName: job.name, attempt });
+
+  const start = Date.now();
+  try {
+    let result;
+    switch (job.name) {
+      case 'companion-moods':
+        result = await companionMoods(job, log);
+        break;
+      case 'zoo-daily-activities':
+        result = await zooDailyActivities(job, log);
+        break;
+      case 'zookeeper-letters':
+        result = await zookeeperLetters(job, log);
+        break;
+      default:
+        throw new Error(`Unknown zoo-life job: ${job.name}`);
+    }
+    jobLog.info({ msg: 'job returned', durationMs: Date.now() - start, result });
+    return result;
+  } catch (err) {
+    jobLog.error({ event: 'job_failed', durationMs: Date.now() - start, err });
+    throw err;
+  }
+});
+
+zooWorker.on('ready', () => {
+  log.info({ event: 'worker_ready', queue: ZOO_QUEUE });
+});
+zooWorker.on('failed', (job, err) => {
+  log.error({ event: 'job_failed', queue: ZOO_QUEUE, jobId: job?.id, jobName: job?.name, err });
+});
+zooWorker.on('error', (err) => {
+  log.error({ msg: 'zoo worker error', err });
+});
+
+// Register the daily cron schedulers. Best-effort: a registration failure (e.g.
+// transient Redis blip on boot) is logged but must not stop the worker process —
+// the media/digest pipelines are the load-bearing ones.
+registerZooSchedulers(zooQueue)
+  .then(() => log.info({ msg: 'zoo schedulers registered', queue: ZOO_QUEUE }))
+  .catch((err) => log.error({ msg: 'zoo scheduler registration failed', err }));
+
 async function shutdown(signal) {
   log.info({ msg: 'shutdown begin', signal });
   try {
@@ -355,6 +413,8 @@ async function shutdown(signal) {
       reunderstandWorker.close(),
       moderationWorker.close(),
       incidentWorker.close(),
+      zooWorker.close(),
+      zooQueue.close(),
     ]);
     const conn = getRedisConnection();
     await conn.quit();
