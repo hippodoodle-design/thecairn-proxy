@@ -1,4 +1,4 @@
-import { getServiceClient } from '@cairn/shared/supabase';
+import { getServiceClient, isMissingTable } from '@cairn/shared/supabase';
 import { generateDailyActivities } from '@cairn/shared/companions';
 
 /**
@@ -24,6 +24,10 @@ export async function zooDailyActivities(job, log) {
     .select('id')
     .eq('date', today)
     .limit(1);
+  if (isMissingTable(exErr)) {
+    jobLog.info?.({ msg: 'zoo-daily-activities: schema not applied yet, skipping', generated: 0 });
+    return { generated: 0, skipped: true, reason: 'schema-not-applied' };
+  }
   if (exErr) throw new Error(`zoo-daily-activities: guard query failed: ${exErr.message}`);
   if (existing && existing.length > 0) {
     jobLog.info?.({ msg: 'zoo-daily-activities: already generated today', generated: 0 });

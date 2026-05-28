@@ -37,3 +37,15 @@ export async function getServiceClient() {
 
   return cached;
 }
+
+/**
+ * True when a PostgREST error means "this table doesn't exist yet" — either
+ * Postgres 42P01 ("relation does not exist") or PGRST205 (no entry in the
+ * schema cache). Lets a job no-op gracefully when its migration hasn't been
+ * applied, rather than failing on a schedule. Mirrors scripts/test-companions.js.
+ */
+export function isMissingTable(error) {
+  if (!error) return false;
+  if (error.code === '42P01' || error.code === 'PGRST205') return true;
+  return /does not exist|schema cache|could not find the table/i.test(error.message || '');
+}

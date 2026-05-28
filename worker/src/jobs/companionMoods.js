@@ -1,4 +1,4 @@
-import { getServiceClient } from '@cairn/shared/supabase';
+import { getServiceClient, isMissingTable } from '@cairn/shared/supabase';
 import { drawMood, traitsOf } from '@cairn/shared/companions';
 
 /**
@@ -25,6 +25,10 @@ export async function companionMoods(job, log) {
     .from('user_companions')
     .select('id, personality_traits')
     .eq('status', 'active');
+  if (isMissingTable(aErr)) {
+    jobLog.info?.({ msg: 'companion-moods: schema not applied yet, skipping', set: 0 });
+    return { set: 0, skipped: 0, reason: 'schema-not-applied' };
+  }
   if (aErr) throw new Error(`companion-moods: could not load active companions: ${aErr.message}`);
 
   if (!active || active.length === 0) {

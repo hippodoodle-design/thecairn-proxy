@@ -1,4 +1,4 @@
-import { getServiceClient } from '@cairn/shared/supabase';
+import { getServiceClient, isMissingTable } from '@cairn/shared/supabase';
 import { generateLetter, traitsOf } from '@cairn/shared/companions';
 
 /** Daily chance that any one active/in-zoo pet gets a letter. Never spammy. */
@@ -26,6 +26,10 @@ export async function zookeeperLetters(job, log) {
     .from('user_companions')
     .select('id, custom_name, is_user_uploaded, personality_traits, companion:companions (display_name)')
     .in('status', ['active', 'in_zoo']);
+  if (isMissingTable(cErr)) {
+    jobLog.info?.({ msg: 'zookeeper-letters: schema not applied yet, skipping', generated: 0 });
+    return { generated: 0, considered: 0, reason: 'schema-not-applied' };
+  }
   if (cErr) throw new Error(`zookeeper-letters: could not load candidates: ${cErr.message}`);
 
   if (!candidates || candidates.length === 0) {
