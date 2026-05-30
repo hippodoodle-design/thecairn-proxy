@@ -196,7 +196,7 @@ export async function processVideoUrl(url, options = {}) {
   }
 }
 
-export { PIPELINE_VERSION, deriveUnderstandingStatus } from './schema.js';
+export { PIPELINE_VERSION, deriveUnderstandingStatus, STONE_PIPELINE_COLUMNS } from './schema.js';
 export { createYtDlpAcquirer } from './acquire/yt-dlp.js';
 export { extractAudio } from './transcribe/extract-audio.js';
 export { createWhisperTranscriber, createStubTranscriber } from './transcribe/index.js';

@@ -89,6 +89,18 @@
 export const PIPELINE_VERSION = 'v0.8.0-safety-rails';
 
 /**
+ * The stones columns the media pipeline reads when it loads a stone to
+ * authorize and process it: `id` to address the row, `owner_id` for the
+ * owner-scoped check, `kind` to confirm it is a video stone, and `metadata`
+ * to read/merge the `media_pipeline` blob. Used as a Supabase `.select()`
+ * projection. Single source of truth — was previously duplicated verbatim
+ * across the harvest/reunderstand routes and worker jobs.
+ *
+ * @type {string}
+ */
+export const STONE_PIPELINE_COLUMNS = 'id, owner_id, kind, metadata';
+
+/**
  * Decide whether an understanding came back strong enough to surface, or
  * should be offered a re-understand pass. The rule is intentionally narrow —
  * the goal is to catch genuinely empty results, not punish low-information

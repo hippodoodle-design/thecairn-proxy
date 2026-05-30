@@ -9,6 +9,7 @@ import {
   scanThenStoreFrame,
   setStoneStatus,
   PIPELINE_VERSION,
+  STONE_PIPELINE_COLUMNS,
 } from '@cairn/shared/media-pipeline';
 import {
   createR2Storage,
@@ -64,7 +65,7 @@ export async function processMediaHarvest(input, options = {}) {
   // 1. Load stone
   const { data: stone, error: stoneErr } = await supabase
     .from('stones')
-    .select('id, owner_id, kind, metadata')
+    .select(STONE_PIPELINE_COLUMNS)
     .eq('id', stone_id)
     .single();
 
