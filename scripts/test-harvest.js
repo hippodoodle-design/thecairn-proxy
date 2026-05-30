@@ -23,7 +23,6 @@
  */
 
 import { existsSync, statSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { processVideoUrl } from '../shared/src/media-pipeline/index.js';
 import { processMediaHarvest } from '../worker/src/jobs/mediaHarvest.js';

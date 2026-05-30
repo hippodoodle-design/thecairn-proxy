@@ -16,8 +16,7 @@
  *     on a thin video)
  */
 
-import { rmSync, existsSync, statSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import {
   processVideoUrl,

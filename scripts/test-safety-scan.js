@@ -13,7 +13,7 @@
  *      classification='csam_match' and bytes never written to storage.
  */
 
-import { mkdirSync, writeFileSync, statSync, existsSync, rmSync, readFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, statSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request } from 'undici';
@@ -23,7 +23,6 @@ import {
   createNsfwSkip,
   scanThenStoreFrame,
 } from '../shared/src/media-pipeline/safety/index.js';
-import { createNsfwLive } from '../shared/src/media-pipeline/safety/nsfw.js';
 import { createStubStorage, STUB_STORAGE_ROOT } from '../shared/src/media-pipeline/storage/index.js';
 import { SafetyError } from '../shared/src/media-pipeline/errors.js';
 
