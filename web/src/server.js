@@ -9,6 +9,7 @@ import mediaReunderstandRouter from './routes/media-reunderstand.js';
 import moderationRouter from './routes/moderation.js';
 import r2SignRouter from './routes/r2-sign.js';
 import companionsRouter, { speciesRequestsRouter } from './routes/companions.js';
+import accountRouter from './routes/account.js';
 import healthRouter from './routes/health.js';
 
 const log = createLogger('thecairn-web');
@@ -53,6 +54,7 @@ app.use('/api/moderation', moderationRouter);
 app.use('/api/r2', r2SignRouter);
 app.use('/api/companions', companionsRouter);
 app.use('/api/species-requests', speciesRequestsRouter);
+app.use('/api/account', accountRouter);
 
 // 404 for anything unmatched.
 app.use((req, res) => {
