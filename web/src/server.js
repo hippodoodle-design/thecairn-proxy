@@ -9,6 +9,7 @@ import mediaReunderstandRouter from './routes/media-reunderstand.js';
 import moderationRouter from './routes/moderation.js';
 import r2SignRouter from './routes/r2-sign.js';
 import companionsRouter, { speciesRequestsRouter } from './routes/companions.js';
+import cairnStoreRouter from './routes/cairn-store.js';
 import healthRouter from './routes/health.js';
 
 const log = createLogger('thecairn-web');
@@ -23,6 +24,10 @@ app.use(corsMiddleware);
 // parser — express.json is idempotent (skips a request whose body it already
 // parsed), so the global parser below leaves this path's body untouched.
 app.use('/api/companions/upload-1d', express.json({ limit: '8mb' }));
+// HippoDelivery deposit batches carry a list of item references (no blobs), but
+// a large rescue can list many items — give the deposit path a roomier parser
+// ahead of the global 32kb one (express.json is idempotent per request).
+app.use('/api/cairn/deposit', express.json({ limit: '2mb' }));
 app.use(express.json({ limit: '32kb' }));
 
 // Per-request access log. Cheap, structured.
@@ -53,6 +58,7 @@ app.use('/api/moderation', moderationRouter);
 app.use('/api/r2', r2SignRouter);
 app.use('/api/companions', companionsRouter);
 app.use('/api/species-requests', speciesRequestsRouter);
+app.use('/api/cairn', cairnStoreRouter);
 
 // 404 for anything unmatched.
 app.use((req, res) => {
