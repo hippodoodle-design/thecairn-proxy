@@ -52,10 +52,14 @@ export function createStubStorage() {
     },
 
     async storeObject({ filePath, key, contentType = 'application/octet-stream' }) {
+      const data = readFileSync(filePath);
+      return this.storeBuffer({ buffer: data, key, contentType });
+    },
+
+    async storeBuffer({ buffer, key, contentType = 'application/octet-stream' }) {
       const dest = path.join(STUB_ROOT, key);
       mkdirSync(path.dirname(dest), { recursive: true });
-      const data = readFileSync(filePath);
-      writeFileSync(dest, data);
+      writeFileSync(dest, buffer);
       const size_bytes = statSync(dest).size;
 
       log.info({ msg: 'stub-storage:wrote-object', key, dest, contentType, size_bytes });
