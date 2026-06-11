@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { buildReunderstandQueue, REUNDERSTAND_QUEUE } from '@cairn/shared/queue';
 import { getServiceClient } from '@cairn/shared/supabase';
-import { setStoneStatus } from '@cairn/shared/media-pipeline';
+import { setStoneStatus, STONE_PIPELINE_COLUMNS } from '@cairn/shared/media-pipeline';
 import { createLogger } from '@cairn/shared/logger';
 import { requireAuth } from '../middleware/auth.js';
 import { rateLimitPerUser } from '../middleware/rateLimit.js';
@@ -43,7 +43,7 @@ router.post('/:stone_id/reunderstand', requireAuth, rateLimitPerUser, async (req
     const supabase = await getServiceClient();
     const { data: stone, error: stoneErr } = await supabase
       .from('stones')
-      .select('id, owner_id, kind, metadata')
+      .select(STONE_PIPELINE_COLUMNS)
       .eq('id', stone_id)
       .single();
 

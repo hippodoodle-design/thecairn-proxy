@@ -15,6 +15,7 @@ import {
   extractAudio,
   extractFrames,
   PIPELINE_VERSION,
+  STONE_PIPELINE_COLUMNS,
 } from '@cairn/shared/media-pipeline';
 import { createR2Storage, createStubStorage } from '@cairn/shared/media-pipeline/storage';
 import { SafetyError } from '@cairn/shared/media-pipeline/errors';
@@ -80,7 +81,7 @@ export async function processMediaReunderstand(input, options = {}) {
   // 1. Load + validate
   const { data: stone, error: stoneErr } = await supabase
     .from('stones')
-    .select('id, owner_id, kind, metadata')
+    .select(STONE_PIPELINE_COLUMNS)
     .eq('id', stone_id)
     .single();
 
