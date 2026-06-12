@@ -15,13 +15,13 @@
  */
 
 import { createLogger } from '../logger.js';
-import { buildSystemPrompt, cannedReply, screenReply, SAFE_REDIRECT } from './persona.js';
+import { buildSystemPrompt, cannedReply, screenReply, guardInput, SAFE_REDIRECT } from './persona.js';
 import { generateReply, DEFAULT_MODEL } from './llm.js';
 import { synthesizeVoice, getCharacterBalance, LOW_BALANCE_FRACTION } from './tts.js';
 
 // Re-export the persona helpers so callers + tests can reach them through the
 // single package entry point (@cairn/shared/cairn-brain) without a deep import.
-export { buildSystemPrompt, cannedReply, screenReply, SAFE_REDIRECT } from './persona.js';
+export { buildSystemPrompt, cannedReply, screenReply, guardInput, SAFE_REDIRECT, SCOPE_DECLINE, GUARD_DECLINE } from './persona.js';
 
 const log = createLogger('cairn-brain');
 
@@ -61,15 +61,26 @@ export async function generateRobertaTurn(input, opts = {}) {
   meter.turns += 1;
 
   let reply;
-  let source; // 'canned' | 'llm' | 'redirect'
+  let source; // 'canned' | 'llm' | 'redirect' | 'guard'
   let model = null;
   let llmCostUsd = 0;
   let canned = false;
+  let blocked = false;
 
   if (!userText) {
     // Empty turn → gentle safe redirect, never a refusal. No spend.
     reply = SAFE_REDIRECT;
     source = 'redirect';
+  } else if (guardInput(userText)) {
+    // Rule-based guard fired BEFORE any AI call (item-7 security req 5): an
+    // injection/extraction/jailbreak or blatant off-Cairn-scope request. Warm
+    // in-character decline, NO model spend, and (below) NO voice spend — so a
+    // flood of abuse can never drain either budget.
+    const guard = guardInput(userText);
+    reply = guard.reply;
+    source = 'guard';
+    blocked = true;
+    log.info({ msg: 'turn:guard-blocked', reason: guard.reason });
   } else {
     const fixed = cannedReply(userText);
     if (fixed) {
@@ -106,7 +117,7 @@ export async function generateRobertaTurn(input, opts = {}) {
   let audio;
   let ttsChars = 0;
   let lowBalance = false;
-  if (wantVoice && reply) {
+  if (wantVoice && reply && !blocked) {
     const tts = await synthesizeVoice(reply, { canned });
     if (tts?.audioBase64) {
       audio = tts.audioBase64;
@@ -152,6 +163,7 @@ export async function generateRobertaTurn(input, opts = {}) {
       voice: Boolean(audio),
       ttsChars,
       lowBalance,
+      blocked,
       turn: meter.turns,
     },
   };
