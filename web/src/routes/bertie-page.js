@@ -256,7 +256,8 @@ export function renderBertiePage({ configured, presetKey = '', ack, channel }) {
   function notConfigured() {
     app.innerHTML =
       '<div class="notcfg">Bertie isn\\'t switched on yet.<br><br>' +
-      'Set <code>BERTIE_ADMIN_SECRET</code> on the proxy to enable him. ' +
+      'Provision the HippoBuddy credential <code>bertie-admin-secret-thecairn</code> ' +
+      '(or set <code>BERTIE_ADMIN_SECRET</code>) to enable him. ' +
       'Until then he is invisible and unusable — which is exactly why customers can never reach him.</div>';
   }
 
