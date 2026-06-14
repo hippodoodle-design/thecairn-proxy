@@ -46,6 +46,7 @@ const BRIDGE_PUSH_TIMEOUT_MS = 3000;
 const CREDENTIAL_REGISTRY = {
   supabaseServiceRole:   { credentialName: 'supabase-thecairn-service-role',   envFallbackName: 'SUPABASE_SERVICE_ROLE_KEY' },
   openaiApiKey:          { credentialName: 'openai-api-key-thecairn',          envFallbackName: 'OPENAI_API_KEY' },
+  elevenLabsApiKey:      { credentialName: 'elevenlabs-api-key-thecairn',      envFallbackName: 'ELEVENLABS_API_KEY' },
   r2AccessKeyId:         { credentialName: 'r2-access-key-id-thecairn',        envFallbackName: 'R2_ACCESS_KEY_ID' },
   r2SecretAccessKey:     { credentialName: 'r2-secret-access-key-thecairn',    envFallbackName: 'R2_SECRET_ACCESS_KEY' },
   cloudflareApiToken:    { credentialName: 'cloudflare-api-token-thecairn',    envFallbackName: 'CLOUDFLARE_API_TOKEN' },
@@ -428,6 +429,14 @@ export function getOpenAIApiKey() {
   return getCredential(
     CREDENTIAL_REGISTRY.openaiApiKey.credentialName,
     { envFallbackName: CREDENTIAL_REGISTRY.openaiApiKey.envFallbackName },
+  );
+}
+
+/** @returns {Promise<string>} */
+export function getElevenLabsApiKey() {
+  return getCredential(
+    CREDENTIAL_REGISTRY.elevenLabsApiKey.credentialName,
+    { envFallbackName: CREDENTIAL_REGISTRY.elevenLabsApiKey.envFallbackName },
   );
 }
 
