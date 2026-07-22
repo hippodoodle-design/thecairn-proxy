@@ -83,7 +83,33 @@ If Codex hits a repeated approval loop for the same family of commands,
 that's a bug in the interaction pattern — not a signal that Codex should
 work more cautiously.
 
-## How Codex reports
+## == TASK OWNERSHIP + ADDRESSING ==
+
+These rules apply whenever Codex picks up work from the Notice Board or any
+inbox channel.
+
+### Task ownership
+
+1. Immediately claim the task with
+   `POST /api/notes/:id/claim` and `{ "claimed_by": "codex" }`.
+2. If the claim is rejected because another AI owns the task, do not proceed;
+   find the next unclaimed task.
+3. On completion, close it with `POST /api/notes/:id/close`.
+4. If it cannot be completed, release it with
+   `POST /api/notes/:id/release` and give a reason.
+
+Never begin a task without claiming it first. Never abandon a claimed task
+silently.
+
+### Addressed tasks
+
+- Only pick up a task when `primary_for` is `codex` or `all`.
+- If `primary_for` names another party, do not pick up the task.
+- If `primary_for` is absent, post a clarification request to the Notice
+  Board and do not start.
+- A task addressed to `all` may be picked up only after a successful claim.
+
++## How Codex reports
 
 - Milestones + completed work → Notice Board note (topic prefix "amanda:"
   if it's for Amanda; "cc:" if it's for CC; "claude:" if it's for the
