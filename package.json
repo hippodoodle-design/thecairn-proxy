@@ -9,6 +9,7 @@
     "worker"
   ],
   "scripts": {
+    "test": "node --test shared/test web/test",
     "dev:redis": "docker compose up redis",
     "dev:web": "node --env-file=.env --watch web/src/server.js",
     "dev:worker": "node --env-file=.env --watch worker/src/worker.js"
