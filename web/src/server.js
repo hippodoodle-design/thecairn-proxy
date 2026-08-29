@@ -9,6 +9,7 @@ import mediaReunderstandRouter from './routes/media-reunderstand.js';
 import moderationRouter from './routes/moderation.js';
 import r2SignRouter from './routes/r2-sign.js';
 import companionsRouter, { speciesRequestsRouter } from './routes/companions.js';
+import importRouter from './routes/import.js';
 import healthRouter from './routes/health.js';
 
 const log = createLogger('thecairn-web');
@@ -23,6 +24,12 @@ app.use(corsMiddleware);
 // parser — express.json is idempotent (skips a request whose body it already
 // parsed), so the global parser below leaves this path's body untouched.
 app.use('/api/companions/upload-1d', express.json({ limit: '8mb' }));
+// The phone-importer safety-match accepts a batch of hashes (up to 500), which
+// can exceed the global 32kb cap. JSON bodies here get a larger parser; the
+// /api/import/item path is multipart/form-data, which express.json skips
+// (multer handles it). Mounted BEFORE the global parser — express.json is
+// idempotent and leaves an already-parsed body untouched.
+app.use('/api/import', express.json({ limit: '512kb' }));
 app.use(express.json({ limit: '32kb' }));
 
 // Per-request access log. Cheap, structured.
@@ -53,6 +60,7 @@ app.use('/api/moderation', moderationRouter);
 app.use('/api/r2', r2SignRouter);
 app.use('/api/companions', companionsRouter);
 app.use('/api/species-requests', speciesRequestsRouter);
+app.use('/api/import', importRouter);
 
 // 404 for anything unmatched.
 app.use((req, res) => {

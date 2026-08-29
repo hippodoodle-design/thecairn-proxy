@@ -116,7 +116,20 @@ export function createR2Storage() {
 
     async storeObject({ filePath, key, contentType = 'application/octet-stream' }) {
       const body = readFileSync(filePath);
-      const size_bytes = body.length;
+      return this.storeBuffer({ buffer: body, key, contentType });
+    },
+
+    /**
+     * Store an in-memory Buffer directly (no temp file). Used by the
+     * phone-importer item endpoint, which receives the blob as a multipart
+     * upload buffer and never lands it on disk. Same put/error semantics as
+     * storeObject.
+     *
+     * @param {{ buffer: Buffer, key: string, contentType?: string }} args
+     * @returns {Promise<{ key: string, size_bytes: number, backend: 'r2' }>}
+     */
+    async storeBuffer({ buffer, key, contentType = 'application/octet-stream' }) {
+      const size_bytes = buffer.length;
 
       log.info({ msg: 'r2-storage:put-object', key, contentType, size_bytes });
 
@@ -125,7 +138,7 @@ export function createR2Storage() {
         await s3.send(new PutObjectCommand({
           Bucket: process.env.R2_BUCKET,
           Key: key,
-          Body: body,
+          Body: buffer,
           ContentType: contentType,
         }));
       } catch (err) {
